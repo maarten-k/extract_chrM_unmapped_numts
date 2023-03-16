@@ -9,7 +9,6 @@ for l in [line.split()[0:2] for line in open(config["sample2file"]).readlines()]
         "/projectmine-nfs/",
         "gridftp.grid.sara.nl:2811/pnfs/grid.sara.nl/data/lsgrid/Project_MinE/",
     )
-all_sample_map={"test":"/home/projectmine-mkooyman/realignment/LP6005681-DNA_D07.final-gatk.cram"}
 
 rule all:
     input:
@@ -22,8 +21,8 @@ rule all:
 rule extract_chrM:
     input:
         cram=lambda wildcards: (
-            #gridftp.remote(f"{all_sample_map[wildcards.sample]}", streams=1)
-	    all_sample_map[wildcards.sample]
+            gridftp.remote(f"{all_sample_map[wildcards.sample]}", streams=1)
+	    #all_sample_map[wildcards.sample]
         ),
     output:
         temp("results/{sample}_numts_chrM.bam"),
@@ -44,8 +43,8 @@ rule extract_chrM:
 rule extract_unmapped:
     input:
         cram=lambda wildcards: (
-	    all_sample_map[wildcards.sample]
-            #gridftp.remote(f"{all_sample_map[wildcards.sample]}", streams=1)
+	    #all_sample_map[wildcards.sample]
+            gridftp.remote(f"{all_sample_map[wildcards.sample]}", streams=1)
         ),
     output:
         temp("results/{sample}_unmapped.bam"),
