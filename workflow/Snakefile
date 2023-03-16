@@ -1,0 +1,83 @@
+from snakemake.remote import gridftp
+gridftp = gridftp.RemoteProvider()
+
+configfile: "config/config.yaml"
+
+all_sample_map = {}
+for l in [line.split()[0:2] for line in open(config["sample2file"]).readlines()]:
+    all_sample_map[l[0]] = l[1].replace(
+        "/projectmine-nfs/",
+        "gridftp.grid.sara.nl:2811/pnfs/grid.sara.nl/data/lsgrid/Project_MinE/",
+    )
+all_sample_map={"test":"/home/projectmine-mkooyman/realignment/LP6005681-DNA_D07.final-gatk.cram"}
+
+rule all:
+    input:
+        expand(
+            "results/{sample}_unmap.bam",
+            sample=all_sample_map.keys(),
+        ),
+
+
+rule extract_chrM:
+    input:
+        cram=lambda wildcards: (
+            #gridftp.remote(f"{all_sample_map[wildcards.sample]}", streams=1)
+	    all_sample_map[wildcards.sample]
+        ),
+    output:
+        temp("results/{sample}_numts_chrM.bam"),
+    conda:
+        "envs/samtools.yaml"
+    threads: 1
+    resources:
+        runtime=10,
+        mem_mb=500,
+    group:
+        "extract"
+    shell:
+        """
+        samtools view -h -o {output} {input.cram} chr1:629084-634422, chr17:22521366-22521502, chrM
+        """
+
+
+rule extract_unmapped:
+    input:
+        cram=lambda wildcards: (
+	    all_sample_map[wildcards.sample]
+            #gridftp.remote(f"{all_sample_map[wildcards.sample]}", streams=1)
+        ),
+    output:
+        temp("results/{sample}_unmapped.bam"),
+    conda:
+        "envs/samtools.yaml"
+    threads: 1
+    resources:
+        runtime=10,
+        mem_mb=500,
+    group:
+        "extract"
+    shell:
+        """
+        samtools view -b -f 4 {input} -o {output}
+         """
+
+
+rule merge:
+    input:
+        "results/{sample}_unmapped.bam",
+        "results/{sample}_numts_chrM.bam",
+    output:
+        "results/{sample}_unmap.bam",
+    conda:
+        "envs/samtools.yaml"
+    threads: 1
+    resources:
+        runtime=10,
+        mem_mb=500,
+    group:
+        "extract"
+    shell:
+        """ 
+        samtools merge -O bam {output} {input}
+        """
