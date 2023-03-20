@@ -13,7 +13,7 @@ for l in [line.split()[0:2] for line in open(config["sample2file"]).readlines()]
 rule all:
     input:
         expand(
-            "results/{sample}_unmap.bam",
+            "results/{sample}_unmap.cram",
             sample=all_sample_map.keys(),
         ),
 
@@ -67,7 +67,7 @@ rule merge:
         "results/{sample}_unmapped.bam",
         "results/{sample}_numts_chrM.bam",
     output:
-        "results/{sample}_unmap.bam",
+        "results/{sample}_unmap.cram",
     conda:
         "envs/samtools.yaml"
     threads: 1
