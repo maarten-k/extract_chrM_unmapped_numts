@@ -1,19 +1,24 @@
 from snakemake.remote import gridftp
+
 gridftp = gridftp.RemoteProvider()
+
 
 configfile: "config/config.yaml"
 
+
 all_sample_map = {}
 for l in [line.split()[0:2] for line in open(config["sample2file"]).readlines()]:
-    all_sample_map[l[0]] = l[1].replace(
-        "/projectmine-nfs/",
-        "gridftp.grid.sara.nl:2811/pnfs/grid.sara.nl/data/lsgrid/Project_MinE/",
-    )
+    if "/UK/" in l[1]:
+        all_sample_map[l[0]] = l[1].replace(
+            "/projectmine-nfs/",
+            "gridftp.grid.sara.nl:2811/pnfs/grid.sara.nl/data/lsgrid/Project_MinE/",
+        )
+
 
 rule all:
     input:
         expand(
-            "results/{sample}_unmap.cram",
+            "results/uploaded/{sample}_unmap.cram",
             sample=all_sample_map.keys(),
         ),
 
@@ -22,13 +27,15 @@ rule extract_chrM:
     input:
         cram=lambda wildcards: (
             gridftp.remote(f"{all_sample_map[wildcards.sample]}", streams=1)
-	    #all_sample_map[wildcards.sample]
+        ),
+        crai=lambda wildcards: (
+            gridftp.remote(f"{all_sample_map[wildcards.sample]}.crai", streams=1),
         ),
     output:
         temp("results/{sample}_numts_chrM.bam"),
     conda:
         "envs/samtools.yaml"
-    threads: 1
+    threads: 0
     resources:
         runtime=10,
         mem_mb=500,
@@ -43,7 +50,6 @@ rule extract_chrM:
 rule extract_unmapped:
     input:
         cram=lambda wildcards: (
-	    #all_sample_map[wildcards.sample]
             gridftp.remote(f"{all_sample_map[wildcards.sample]}", streams=1)
         ),
     output:
@@ -52,7 +58,7 @@ rule extract_unmapped:
         "envs/samtools.yaml"
     threads: 1
     resources:
-        runtime=10,
+        runtime=120,
         mem_mb=500,
     group:
         "extract"
@@ -67,16 +73,42 @@ rule merge:
         "results/{sample}_unmapped.bam",
         "results/{sample}_numts_chrM.bam",
     output:
-        "results/{sample}_unmap.cram",
+        temp("results/{sample}_unmap.cram"),
     conda:
         "envs/samtools.yaml"
     threads: 1
+    resources:
+        runtime=20,
+        mem_mb=500,
+    group:
+        "extract"
+    shell:
+        """ 
+        samtools merge -O cram {output} {input}
+        """
+
+
+rule UploadtoGridd:
+    input:
+        "results/{sample}_unmap.cram",
+    output:
+        "results/uploaded/{sample}_unmap.cram",
     resources:
         runtime=10,
         mem_mb=500,
     group:
         "extract"
     shell:
-        """ 
-        samtools merge -O bam {output} {input}
+        """
+        set +u
+            eval "$(command conda 'shell.bash' 'hook' 2> /dev/null)"
+            conda activate /cvmfs/softdrive.nl/projectmine_sw/software
+            set -u
+
+            cram=$(basename {input})
+            pm_copy  {input} /projectmine-nfs/Tape/Country/UK/unmap/${{cram}}
+            set +u
+            conda deactivate
+            set -u
+            touch {output}
         """
